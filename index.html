@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSC CGL Practice Tracker</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --bg: #f4f7f6;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: var(--primary); }
+        
+        .setup-section { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: #ecf0f1; padding: 15px; border-radius: 8px; }
+        input, select, button { padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+        button { cursor: pointer; background: var(--primary); color: white; border: none; font-weight: bold; }
+        button:hover { opacity: 0.9; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background: var(--primary); color: white; }
+        
+        .btn-check { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #ddd; background: white; font-size: 18px; }
+        .btn-right.active { background: var(--success); color: white; border-color: var(--success); }
+        .btn-wrong.active { background: var(--danger); color: white; border-color: var(--danger); }
+        
+        .summary { margin-top: 20px; font-weight: bold; font-size: 1.2em; color: var(--primary); }
+        .set-history { margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; }
+        .history-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>SSC CGL Practice Tracker</h1>
+
+    <div class="setup-section">
+        <input type="text" id="setName" placeholder="Set Name (e.g., Math Set 1)">
+        <input type="number" id="qCount" placeholder="No. of Questions" min="1" max="100">
+        <button onclick="createNewSet()">Create Set</button>
+        <button onclick="clearAllData()" style="background:#95a5a6; margin-left:auto;">Clear All History</button>
+    </div>
+
+    <h2 id="currentSetTitle">No Active Set</h2>
+    
+    <table id="practiceTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>Q. No</th>
+                <th>Your Option</th>
+                <th>Status (Right/Wrong)</th>
+                <th>Correct Option</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            </tbody>
+    </table>
+
+    <div id="controls" style="display:none; margin-top:20px; text-align:right;">
+        <div class="summary" id="scoreSummary"></div>
+        <button onclick="saveSet()" style="background:var(--success); padding: 15px 30px; font-size: 1rem;">Save & Close Set</button>
+    </div>
+
+    <div class="set-history">
+        <h3>Previous Data (Saved)</h3>
+        <div id="historyList"></div>
+    </div>
+</div>
+
+<script>
+    let currentData = [];
+    let history = JSON.parse(localStorage.getItem('sscHistory')) || [];
+
+    function renderHistory() {
+        const list = document.getElementById('historyList');
+        list.innerHTML = history.length ? '' : '<p>No saved data yet.</p>';
+        history.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'history-item';
+            div.innerHTML = `
+                <span><strong>${item.name}</strong> - ${item.date}</span>
+                <span>Score: ${item.score}/${item.total} 
+                <button onclick="deleteSet(${index})" style="background:none; color:red; padding:0; margin-left:10px;">[Delete]</button></span>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    function createNewSet() {
+        const name = document.getElementById('setName').value;
+        const count = document.getElementById('qCount').value;
+
+        if(!name || !count) return alert("Please enter Set Name and Number of Questions");
+
+        document.getElementById('currentSetTitle').innerText = "Current: " + name;
+        document.getElementById('practiceTable').style.display = 'table';
+        document.getElementById('controls').style.display = 'block';
+        
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        currentData = [];
+
+        for(let i = 1; i <= count; i++) {
+            currentData.push({ q: i, mine: '', status: '', correct: '' });
+            const row = `
+                <tr>
+                    <td>${i}</td>
+                    <td><input type="text" style="width:50px" oninput="updateData(${i}, 'mine', this.value)"></td>
+                    <td>
+                        <button class="btn-check btn-right" id="r-${i}" onclick="setStatus(${i}, 'right')">✓</button>
+                        <button class="btn-check btn-wrong" id="w-${i}" onclick="setStatus(${i}, 'wrong')">✗</button>
+                    </td>
+                    <td><input type="text" style="width:50px" oninput="updateData(${i}, 'correct', this.value)"></td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        }
+        updateScore();
+    }
+
+    function updateData(q, field, val) {
+        currentData[q-1][field] = val;
+    }
+
+    function setStatus(q, status) {
+        currentData[q-1].status = status;
+        document.getElementById(`r-${q}`).classList.toggle('active', status === 'right');
+        document.getElementById(`w-${q}`).classList.toggle('active', status === 'wrong');
+        updateScore();
+    }
+
+    function updateScore() {
+        const correct = currentData.filter(d => d.status === 'right').length;
+        document.getElementById('scoreSummary').innerText = `Current Score: ${correct} / ${currentData.length}`;
+    }
+
+    function saveSet() {
+        const name = document.getElementById('setName').value;
+        const correct = currentData.filter(d => d.status === 'right').length;
+        
+        const record = {
+            name: name,
+            total: currentData.length,
+            score: correct,
+            date: new Date().toLocaleDateString()
+        };
+
+        history.unshift(record);
+        localStorage.setItem('sscHistory', JSON.stringify(history));
+        
+        // Reset UI
+        document.getElementById('practiceTable').style.display = 'none';
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('currentSetTitle').innerText = "Set Saved!";
+        renderHistory();
+    }
+
+    function deleteSet(index) {
+        history.splice(index, 1);
+        localStorage.setItem('sscHistory', JSON.stringify(history));
+        renderHistory();
+    }
+
+    function clearAllData() {
+        if(confirm("Are you sure you want to delete all history?")) {
+            localStorage.clear();
+            history = [];
+            renderHistory();
+        }
+    }
+
+    // Load history on start
+    renderHistory();
+</script>
+
+</body>
+</html>
